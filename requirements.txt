@@ -1,0 +1,7 @@
+lmfit
+matplotlib
+numpy
+pandas
+SBstoat
+scipy
+sympy
