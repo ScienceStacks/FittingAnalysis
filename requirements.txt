@@ -5,4 +5,5 @@ numpy
 pandas
 SBstoat
 scipy
+seaborn
 sympy
