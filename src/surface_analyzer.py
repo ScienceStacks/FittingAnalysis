@@ -11,40 +11,52 @@ import tellurium as te
 import pandas as pd
 import seaborn as sn
 
-import src.constants as cn
-
-
 
 class SurfaceAnalyzer():
 
-    def __init__(self, model):
-        if isinstance(model, str):
-            self.antimonyModel = model
-            self.roadrunnerModel = te.loada(self.antimonyModel)
-        else:
-            self.roadrunnerModel = model
-            self.antimonyModel = self.roadrunnerModel.getAntimony()
+  def __init__(self, model, startTime=0, endTime=None, numPoint=None):
+    """
+    Parameters
+    ----------
+    model: str/ExtendedAntimony
+     parameter values are the true values
+    
+    Returns
+    -------
+    """
+    self.startTime = startTime
+    self.endTime = endTime
+    self.numPoint = numPoint
+    if isinstance(model, str):
+      self.antimonyModel = model
+      self.roadrunnerModel = te.loada(self.antimonyModel)
+    else:
+      self.roadrunnerModel = model
+      self.antimonyModel = self.roadrunnerModel.getAntimony()
+    self.baseArr = self.simulate({})
+    self.nrmseNormalization = np.sqrt(np.sum(self.baseArr**2))
 
-  def simulate(parameterDct):
-      """
-      Runs the simulation with the parameter values in the Dct
-      
-      Parameters
-      ----------
-      parameterDct
-          key: parameterName
-          value: value of parameter
-          
-      Returns
-      -------
-      NamedArray
-      """
-      self.roadrunnerModel.reset()
-      for parameterName, value in parameterDct.items():
-          self.roadrunnerModel[[parameterName] = value
-      return self.roadrunnerModel.simulate()
+  def simulate(self, parameterDct):
+    """
+    Runs the simulation with the parameter values in the Dct
+    
+    Parameters
+    ----------
+    parameterDct
+        key: parameterName
+        value: value of parameter
+        
+    Returns
+    -------
+    NamedArray
+    """
+    self.roadrunnerModel.reset()
+    for parameterName, value in parameterDct.items():
+      self.roadrunnerModel[[parameterName] = value
+    data = self.roadrunnerModel.simulate(self.startTime, self.endTime, self.numPoint)
+    return data
 
-def getFlatValues(parameterDct, model):
+  def _getFlatValues(self, parameterDct):
     """
     Provides one dimensional array of simulation results.
     
@@ -54,40 +66,27 @@ def getFlatValues(parameterDct, model):
     model: str
         Antimony string
     """
-    data = simulateModel(parameterDct, model=model)
+    data = self.simulateModel(parameterDct)
     flattenedArr = (data[:, 1:]).flatten()
     return flattenedArr
 
-# Tests
-values = getFlatValues(PARAMETER_DCT, MODEL)
-assert(isinstance(values, np.ndarray))  # Is a numpy array
-assert(np.isclose(values[0], 0))  # Starts at 0
-assert(not np.isnan(sum(values)))  # No nan
-
-
-print("# In[118]:")
-
-
-def calcNrmse(baseArr, parameterDct, model=MODEL):
+  def calcNrmse(self, parameterDct):
     """
     Calculates the R^2 value for the difference between the aseline and parameters.
     
     Parameters
     ----------
-    baseArr: flattened array of results for baseline
     parameterDct: dict
         changed parameters
-    model: str
-         antimony model
          
     Returns
     -------
     float
         root of the mean square error normalized by the variance of the base
     """
-    newArr = getFlatValues(parameterDct, model)
-    residualsArr = baseArr - newArr
-    nrmse = np.var(residualsArr)/np.var(baseArr)
+    newArr = self._getFlatValues(parameterDct, model)
+    residualsArr = self.baseArr - newArr
+    nrmse = np.sqrt(np.sum(residualsArr**2))/self.nrmseNormalization
     return nrmse
 
 # Tests
