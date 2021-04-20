@@ -1,139 +1,146 @@
 """
 Tests for Kinetic Law
 """
-from src.common import constants as cn
-from src.common.simple_sbml import SimpleSBML
-from src.common.kinetic_law import KineticLaw
-from tests.common import helpers
+from src.surface_analyzer import SurfaceAnalyzer
+import src.constants as cn
 
-import copy
-import libsbml
+import matplotlib
+matplotlib.use("Tkagg")
 import numpy as np
+import pandas as pd
 import unittest
 
 
 IGNORE_TEST = False
 IS_PLOT = False
-NUM_LAW = 3
+MODEL = """
 
+J1: $X0 -> x; k1*X0
+J2: x -> $X1; k2*x
 
-class MockFunctionDefinition():
-  """Used to mock function defintions."""
+X0 = 1
+x = 0
+k1 = 1
+k2 = 1
+"""
+MODEL2 = """
 
-  def __init__(self, id, argument_names, body):
-    self.id = id
-    self.argument_names = argument_names
-    self.body = body
+J1: $X0 -> x; k1*X0
+J1a: $X0 -> x2; k1*X0
+J2: x -> $X1; k2*x
+J2a: x2 -> $X1; k2*x2
 
-  def __repr__(self):
-    argument_call = ",".join(self.argument_names)
-    call_str = "%s(%s)" % (self.id, argument_call)
-    return "%s: %s" % (call_str, self.body)
+X0 = 1
+x = 0
+k1 = 1
+k2 = 1
+"""
+PARAMETER_DCT = {"k1": 1, "k2": 1}
 
 
 #############################
 # Tests
 #############################
-class TestKineticLaw(unittest.TestCase):
+class TestSurfaceAnalyzer(unittest.TestCase):
 
   def setUp(self):
-    self.simple = helpers.getSimple_BIOMD6()
-    self.laws = [self.simple.reactions[i].kinetic_law for i in range(NUM_LAW)]
+    self.analyzer = SurfaceAnalyzer(MODEL, PARAMETER_DCT)
 
   def testConstructor(self):
     if IGNORE_TEST:
       return
-    self.assertTrue(
-         isinstance(self.laws[1], KineticLaw))
-    trues = [isinstance(s, str) for s in self.laws[1].symbols]
+    def test(analyzer):
+      self.assertTrue(isinstance(analyzer.baseArr, np.ndarray))
+      self.assertEqual(np.ndim(analyzer.baseArr), 1)
+      self.assertTrue(isinstance(analyzer.nrmseNrm, np.ndarray))
+    #
+    test(self.analyzer)
+    test(SurfaceAnalyzer(MODEL2, PARAMETER_DCT))
+
+  def testSimulate(self):
+    if IGNORE_TEST:
+      return
+    arr = self.analyzer.simulate(PARAMETER_DCT)[:, 1]
+    diffSq = sum((self.analyzer.baseArr - arr)**2)
+    self.assertTrue(np.isclose(diffSq, 0))
+
+  def testGetFlatValues(self):
+    if IGNORE_TEST:
+      return
+    analyzer = SurfaceAnalyzer(MODEL2, PARAMETER_DCT)
+    values = analyzer._getFlatValues(PARAMETER_DCT)
+    self.assertEqual(np.ndim(values), 1)
+
+  def testCalcNrmse(self):
+    if IGNORE_TEST:
+      return
+    def test(model):
+      analyzer = SurfaceAnalyzer(model, PARAMETER_DCT)
+      values = analyzer._getFlatValues(PARAMETER_DCT)
+      rssq = np.sum((values - analyzer.baseArr)**2)
+      self.assertTrue(np.isclose(rssq, 0))
+    #
+    test(MODEL)
+    test(MODEL2)
+
+  def testMkParameterRange(self):
+    if IGNORE_TEST:
+      return
+    def test(size):
+      initialValue = 2
+      changeFrc = 0.5
+      arr = self.analyzer._mkParameterRange(initialValue, changeFrc, size)
+      if size % 2 == 0:
+        self.assertEqual(len(arr), size+1)
+      else:
+        self.assertEqual(len(arr), size)
+      expected = initialValue*(1-changeFrc)
+      self.assertTrue(np.isclose(arr[0], expected))
+    #
+    test(10)
+    test(11)
+    
+  def testMkFactorialDesign(self):
+    if IGNORE_TEST:
+      return
+    analyzer = SurfaceAnalyzer(MODEL2, PARAMETER_DCT)
+    numLevel = 5
+    changeFrc = 1.0
+    parameterDct = {"k1": 1, "k2": 2, "k3": 3}
+    designDF = analyzer._mkFactorialDesign(parameterDct, 1.0, numLevel)
+    # Correct length
+    self.assertEqual(len(designDF), numLevel**len(parameterDct))
+    # First values are 0
+    trues = [v == 0 for v in designDF.loc[0,:]]
+    self.assertTrue(all(trues))
+    # Middle value is the original value of the parameter
+    midIdx = (len(designDF) - 1) // 2
+    trues = [designDF.loc[midIdx, k] == parameterDct[k]
+        for k in parameterDct.keys()]
     self.assertTrue(all(trues))
 
-  def testSymbol(self):
+  def testRunExperiments(self):
     if IGNORE_TEST:
       return
-    def checkSubset(subset,superset):
-      true = set(subset).issubset(set(superset))
-      self.assertTrue(true)
-    # const only
-    checkSubset(['kappa'],self.laws[0].symbols)
-    # simple kinetic law k*A
-    checkSubset(['k6','u'],self.laws[1].symbols)
-    # complex kinetic law with function pow()
-    checkSubset(['z','u','k4','k4prime'],self.laws[2].symbols)
+    numLevel = 5
+    maxFrc = 0.5
+    self.analyzer.runExperiments(maxFrc, numLevel)
+    self.assertTrue(isinstance(self.analyzer.simDF, pd.DataFrame))
+    columns = list(PARAMETER_DCT.keys())
+    columns.append(cn.NRMSE)
+    diff = set(columns).symmetric_difference(self.analyzer.simDF.columns)
+    self.assertEqual(len(diff), 0)
 
-  def testExpandFormula1(self):
-    # Replacement for SBML reactions
+  def testPlotSurface(self):
     if IGNORE_TEST:
       return
-    simple = helpers.getSimple_BIOMD56()
-    kinetic_law = None
-    for fd in simple.function_definitions:
-      for reaction in simple.reactions:
-        if fd.id in reaction.kinetic_law.formula:
-          kinetic_law = KineticLaw(reaction.kinetic_law.libsbml_kinetics,
-              reaction, function_definitions=simple.function_definitions)
-          break
-      if kinetic_law is not None:
-        break
-    if kinetic_law is None:
-      raise RuntimeError("Did not find an embedded function.")
-    self.assertIsNotNone(kinetic_law.expanded_formula)
-    kinetic_law_arguments = ["Vaiep", "Jaiep", "1", "IE"]
-    kinetic_law.expandFormula(simple.function_definitions)
-    for argument in kinetic_law_arguments:
-      self.assertTrue(argument in kinetic_law.expanded_formula)
-
-  def mkKineticLawWithFormula(self, formula):
-    kinetic_law = KineticLaw(self.laws[0].libsbml_kinetics, None)
-    kinetic_law.formula = formula
-    return kinetic_law
-
-  def testExpandFormula2(self):
-    # Simple replacement
-    if IGNORE_TEST:
-      return
-    function_definitions = [
-        MockFunctionDefinition("aa", ["x", "y"], "x + y")
-        ]
-    kinetic_law = self.mkKineticLawWithFormula("aa(1, 2)")
-    kinetic_law.expandFormula(function_definitions)
-    self.assertEqual(kinetic_law.expanded_formula, "1 + 2")
-
-  def testExpandFormula4(self):
-    # Test replacement with other embedded expressions
-    if IGNORE_TEST:
-      return
-    function_definitions = [
-        MockFunctionDefinition("aa", ["x", "y"], "x + y")
-        ]
-    kinetic_law = self.mkKineticLawWithFormula("exp(4) + aa(1, 2) + sin(3)")
-    kinetic_law.expandFormula(function_definitions)
-    self.assertEqual(kinetic_law.expanded_formula, "exp(4) + 1 + 2 + sin(3)")
-
-  def testExpandFormula4(self):
-    # Test replacing multiple functions
-    if IGNORE_TEST:
-      return
-    function_definitions = [
-        MockFunctionDefinition("aa", ["x", "y"], "x + y"),
-        MockFunctionDefinition("bb", ["x", "y"], "x*y")
-        ]
-    kinetic_law = self.mkKineticLawWithFormula("2 + aa(1, 2) + bb(x, z)")
-    kinetic_law.expandFormula(function_definitions)
-    self.assertEqual(kinetic_law.expanded_formula, "2 + 1 + 2 + x*z")
-
-  def testExpandFormula5(self):
-    # Test recursive replacements
-    if IGNORE_TEST:
-      return
-    function_definitions = [
-        MockFunctionDefinition("aa", ["x", "y"], "x + y"),
-        MockFunctionDefinition("bb", ["x", "y"], "bb + aa(x, y)"),
-        MockFunctionDefinition("cc", ["x", "y"], "cc + bb(x, y)")
-        ]
-    kinetic_law = self.mkKineticLawWithFormula("kl + cc(1, 2)")
-    kinetic_law.expandFormula(function_definitions)
-    self.assertEqual(kinetic_law.expanded_formula, "kl + cc + bb + 1 + 2")
+    with self.assertRaises(ValueError):
+      self.analyzer.plotSurface()
+    #
+    numLevel = 10
+    for maxFrc in [1.0, 0.1, 0.01]:
+      self.analyzer.runExperiments(maxFrc, numLevel)
+      self.analyzer.plotSurface(isPlot=IS_PLOT)
 
 
 if __name__ == '__main__':
