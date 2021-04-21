@@ -204,7 +204,8 @@ class SurfaceAnalyzer():
       self.simDF[cn.NRMSE] = nrmses
         
   def plotSurface(self, ax=None, fig=None, scale=1.0,
-      isColorBar=True, isPlot=True, title=""):
+      isColorBar=True, isPlot=True, title="",
+      xlim=None, ylim=None):
     """
     Plots the results of simulation experiments. Updats self.simTable
     
@@ -247,6 +248,10 @@ class SurfaceAnalyzer():
     ax.yaxis.grid(True, linewidth=0.2, linestyle='-', color='0.05')
     ax.xaxis.grid(True, linewidth=0.2, linestyle='-', color='0.05')
     ax.set_title(title)
+    if xlim is not None:
+      ax.set_xlim(xlim)
+    if ylim is not None:
+      ax.set_ylim(ylim)
     # Mark the center
     xIdx = (len(xv) - 1) // 2
     yIdx = (len(yv) - 1) // 2
