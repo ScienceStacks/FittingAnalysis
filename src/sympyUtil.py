@@ -8,12 +8,13 @@ SUffix conventions
 
 """
 
+import inspect
 import matplotlib.pyplot as plt
 import numpy as np
 import sympy
 
 
-def addSymbols(symbolStr, dct=globals()):
+def addSymbols(symbolStr, dct=None):
     """
     Adds symbols to the dictionary.
 
@@ -21,12 +22,16 @@ def addSymbols(symbolStr, dct=globals()):
     ----------
     symbolStr: str
     dct: dict
+        default: globals() of caller
     """
+    if dct is None:
+        frame = inspect.currentframe()
+        dct = frame.f_back.f_globals
     symbols = symbolStr.split(" ")
     for idx, symbol in enumerate(symbols):
         dct[symbol] = sympy.Symbol(symbol)
 
-def removeSymbols(symbolStr, dct=globals()):
+def removeSymbols(symbolStr, dct=None):
     """
     Removes symbols from the dictionary.
 
@@ -35,6 +40,9 @@ def removeSymbols(symbolStr, dct=globals()):
     symbolStr: str
     dct: dict
     """
+    if dct is None:
+        frame = inspect.currentframe()
+        dct = frame.f_back.f_globals
     symbols = symbolStr.split(" ")
     for symbol in symbols:
         del dct[symbol]

@@ -12,21 +12,29 @@ IS_PLOT = False
 VARIABLES = "X Y Z"
 
 
-
-
 #############################
 # Tests
 #############################
 class TestFunctions(unittest.TestCase):
 
     def setUp(self):
-        su.addSymbols(VARIABLES, dct=globals())
+        su.addSymbols(VARIABLES)
 
     def testAddSymbols(self):
         if IGNORE_TEST:
             return
         names = ["xx", "yy"]
-        su.addSymbols(" ".join(names), dct=globals())
+        su.addSymbols(" ".join(names))
+        for name in names:
+            self.assertTrue(name in globals().keys())
+            expr = "isinstance(%s, sympy.Symbol)" % name
+            self.assertTrue(eval(expr))
+
+    def testAddSymbols2(self):
+        if IGNORE_TEST:
+            return
+        names = ["xx", "yy"]
+        su.addSymbols(" ".join(names), dct=globals())  # Ensure explicit opt works
         for name in names:
             self.assertTrue(name in globals().keys())
             expr = "isinstance(%s, sympy.Symbol)" % name
@@ -36,8 +44,8 @@ class TestFunctions(unittest.TestCase):
         if IGNORE_TEST:
             return
         names = ["xx", "yy"]
-        su.addSymbols(" ".join(names), dct=globals())
-        su.removeSymbols(" ".join(names), dct=globals())
+        su.addSymbols(" ".join(names))
+        su.removeSymbols(" ".join(names))
         for name in names:
             self.assertFalse(name in globals().keys())
             
