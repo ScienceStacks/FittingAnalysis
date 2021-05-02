@@ -13,6 +13,31 @@ import numpy as np
 import sympy
 
 
+def addSymbols(symbolStr, dct=globals()):
+    """
+    Adds symbols to the dictionary.
+
+    Parameters
+    ----------
+    symbolStr: str
+    dct: dict
+    """
+    symbols = symbolStr.split(" ")
+    for idx, symbol in enumerate(symbols):
+        dct[symbol] = sympy.Symbol(symbol)
+
+def removeSymbols(symbolStr, dct=globals()):
+    """
+    Removes symbols from the dictionary.
+
+    Parameters
+    ----------
+    symbolStr: str
+    dct: dict
+    """
+    symbols = symbolStr.split(" ")
+    for symbol in symbols:
+        del dct[symbol]
 
 def substitute(expression, subs={}):
     """

@@ -1,5 +1,6 @@
-import src.sympyUtil as ut
 import src.constants as cn
+from src.LTIModel import LTIModel
+import src.sympyUtil as ut
 
 import numpy as np
 import pandas as pd
@@ -9,41 +10,20 @@ import unittest
 
 IGNORE_TEST = True
 IS_PLOT = True
-VARIABLES = "X Y Z"
-
-
 
 
 #############################
 # Tests
 #############################
-class TestFunctions(unittest.TestCase):
+class TestLTIModel(unittest.TestCase):
 
     def setUp(self):
-        names = VARIABLES.split(" ")
-        dct = globals()
-        for name in names:
-            dct[name] = sympy.Symbol(name)
-        pass
+Amat = sympy.Matrix( [[0, 0, 0 ], [k1, -k2, 0], [0, k2, -k3]])
 
-    def testSubstitute(self):
+    def testConstructor(self):
         if IGNORE_TEST:
             return
-        Y = ut.substitute(2*X + 1, subs={X: Z})
-        self.assertTrue("Z" in str(Y))
 
-    def testEvaluate(self):
-        # TESTING
-        val = ut.evaluate(2*X + 1, subs={X: 2})
-        self.assertEqual(val, 5)
-
-    def testEvaluate2(self):
-        if IGNORE_TEST:
-            return
-        val = ut.evaluate(2*X + 1, subs={X: 2})
-        self.assertTrue(np.isclose(val, 5))
-
-          
 
 
 if __name__ == '__main__':
