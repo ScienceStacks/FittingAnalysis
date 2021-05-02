@@ -1,7 +1,7 @@
 """
 Tests for Kinetic Law
 """
-from src.surface_analyzer import SurfaceAnalyzer
+from src.surfaceAnalyzer import SurfaceAnalyzer
 import src.constants as cn
 
 import matplotlib
