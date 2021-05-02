@@ -19,7 +19,7 @@ t = sympy.Symbol("t")
 
 class LTIModel():
 
-    def __init__(self, aMat, initialVec, rVec):
+    def __init__(self, aMat, initialVec, rVec=None):
         """
         Parameters
         ----------
