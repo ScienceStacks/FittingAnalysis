@@ -66,13 +66,15 @@ def substitute(expression, subs={}):
         expr = expr.subs(key, value)
     return sympy.simplify(expr)
 
-def evaluate(expression, **kwargs):
+def evaluate(expression, isNumpy=True, **kwargs):
     """
     Evaluates the solution for the substitutions provided.
 
     Parameters
     ----------
     expression: sympy.Add
+    isNumpy: bool
+        return float or ndarray of float
     kwargs: dict
         keyword arguments for substitute
     
@@ -82,8 +84,32 @@ def evaluate(expression, **kwargs):
     """
     expr = substitute(expression, **kwargs)
     val = expr.evalf()
-    if "rows" in dir(expression):
-        result = np.array(val)
+    if isNumpy:
+        if "rows" in dir(expression):
+            result = np.array(val)
+        else:
+            result = float(val)
     else:
-        result = float(val)
+        result = val
     return result
+
+def mkVector(name, numRow):
+    """
+    Constructs a vector of symbols.
+
+    Parameters
+    ----------
+    name: str
+        root name for elements of the vector
+    numRow: int
+    
+    Returns
+    -------
+    sympy.Matrix numRow X 1
+    """
+    # Create the solution vector. The resulting vector is in the global name space.
+    symbols = ["%s_%d" % (name, n) for n in range(numRow)]
+    symbolStr = " ".join(symbols)
+    addSymbols(symbolStr)
+    return sympy.Matrix([ [s] for s in symbols])
+
