@@ -6,13 +6,44 @@ SUffix conventions
   *Vec - sympy.Matrix N X 1
   *s - list
 
+Notes
+1. By default, symbols are added to locals() of the caller.
+   This can be changed by using the dct optional keyword.
+   This means that all user callable functions must capture
+   the correct symbol dictionary and use this explicitly
+   in internal calls.
+
 """
 
+import collections
 import inspect
 import matplotlib.pyplot as plt
 import numpy as np
 import sympy
 
+SMALL_VALUE = 1e-8
+
+# val - eigenvalue
+# vecs - eigenvectors
+# mul - algebraic multiplicity
+EigenInfo = collections.namedtuple("EigenInfo", "val, vecs, mul")
+
+def _getDct(dct, frame):
+    """
+    Gets the dictionary for the frame.
+
+    Parameters
+    ----------
+    dct: dictionary to use if non-None
+    frame: stack frame
+    
+    Returns
+    -------
+    dict
+    """
+    if dct is None:
+        dct = frame.f_back.f_locals
+    return dct
 
 def addSymbols(symbolStr, dct=None):
     """
@@ -24,9 +55,10 @@ def addSymbols(symbolStr, dct=None):
     dct: dict
         default: globals() of caller
     """
-    if dct is None:
-        frame = inspect.currentframe()
-        dct = frame.f_back.f_globals
+    newDct = _getDct(dct, inspect.currentframe())
+    _addSymbols(symbolStr, newDct)
+
+def _addSymbols(symbolStr, dct):
     symbols = symbolStr.split(" ")
     for idx, symbol in enumerate(symbols):
         dct[symbol] = sympy.Symbol(symbol)
@@ -39,13 +71,16 @@ def removeSymbols(symbolStr, dct=None):
     ----------
     symbolStr: str
     dct: dict
+        Namespace dictionary
     """
-    if dct is None:
-        frame = inspect.currentframe()
-        dct = frame.f_back.f_globals
+    newDct = _getDct(dct, inspect.currentframe())
+    _removeSymbols(symbolStr, newDct)
+
+def _removeSymbols(symbolStr, dct):
     symbols = symbolStr.split(" ")
     for symbol in symbols:
-        del dct[symbol]
+        if symbol in dct.keys():
+            del dct[symbol]
 
 def substitute(expression, subs={}):
     """
@@ -66,7 +101,7 @@ def substitute(expression, subs={}):
         expr = expr.subs(key, value)
     return sympy.simplify(expr)
 
-def evaluate(expression, isNumpy=True, **kwargs):
+def evaluate(expression, dct=None, isNumpy=True, **kwargs):
     """
     Evaluates the solution for the substitutions provided.
 
@@ -75,6 +110,29 @@ def evaluate(expression, isNumpy=True, **kwargs):
     expression: sympy.Add
     isNumpy: bool
         return float or ndarray of float
+    dct: dict
+        Namespace dictionary
+    kwargs: dict
+        keyword arguments for substitute
+    
+    Returns
+    -------
+    float/np.ndarray
+    """
+    newDct = _getDct(dct, inspect.currentframe())
+    return _evaluate(expression, isNumpy=isNumpy, dct=newDct, **kwargs)
+
+def _evaluate(expression, dct, isNumpy=True, **kwargs):
+    """
+    Evaluates the solution for the substitutions provided.
+
+    Parameters
+    ----------
+    expression: sympy.Add
+    isNumpy: bool
+        return float or ndarray of float
+    dct: dict
+        Namespace dictionary
     kwargs: dict
         keyword arguments for substitute
     
@@ -88,28 +146,181 @@ def evaluate(expression, isNumpy=True, **kwargs):
         if "rows" in dir(expression):
             result = np.array(val)
         else:
-            result = float(val)
+            try:
+                result = float(val)
+            except Exception:
+                import pdb; pdb.set_trace()
+                pass
     else:
         result = val
     return result
 
-def mkVector(name, numRow):
+def mkVector(nameRoot, numRow, dct=None):
     """
     Constructs a vector of symbols.
 
     Parameters
     ----------
-    name: str
+    nameRoot: str
         root name for elements of the vector
     numRow: int
+    dct: dict
+        Namespace dictionary
     
     Returns
     -------
     sympy.Matrix numRow X 1
     """
+    newDct = _getDct(dct, inspect.currentframe())
+    return _mkVector(nameRoot, numRow, newDct)
+
+def _mkVector(nameRoot, numRow, dct):
     # Create the solution vector. The resulting vector is in the global name space.
-    symbols = ["%s_%d" % (name, n) for n in range(numRow)]
+    symbols = ["%s_%d" % (nameRoot, n) for n in range(numRow)]
     symbolStr = " ".join(symbols)
-    addSymbols(symbolStr)
+    addSymbols(symbolStr, dct=dct)
     return sympy.Matrix([ [s] for s in symbols])
 
+def flatten(vec):
+    """
+    Converts a sympy N X 1 matrix to a list.
+
+    Parameters
+    ----------
+    vec: symbpy.Matrix N X 1
+    
+    Returns
+    -------
+    list
+    """
+    return [ [v for v in z] for z in vec][0]
+
+# TODO: combine together EigenInfo with same eigenValue
+#       check if vectors have same value. How handle symbols.
+def getEigenInfo(mat):
+    """
+    Collects the eigenvalue and eigenvector information into a list of
+    EigenInfo objects.
+
+    Parameters
+    ----------
+    mat: sympy.Matrix
+    
+    Returns
+    -------
+    list-EigenInfo
+    """
+    eigenInfos = []
+    eigenvalDct = {roundToZero(k): v for k, v in mat.eigenvals().items()}
+    for entry in mat.eigenvects():
+        eigenvalue = roundToZero(entry[0])
+        algebraicMultiplicity = eigenvalDct[eigenvalue]
+        vecs = [vectorRoundToZero(v) for v in entry[2]]  # Eigenvectors
+        algebraicMultiplicity = len(vecs)
+        eigenInfos.append(EigenInfo(val=eigenvalue, vecs=vecs,
+              mul=algebraicMultiplicity))
+    return eigenInfos
+    
+def vectorRoundToZero(vec):
+    if vec.cols > 1:
+        RuntimeError("Can only handle vectors.")
+    newValues = [roundToZero(v) for v in vec]
+    return sympy.Matrix(newValues)
+
+def roundToZero(v):
+    if "is_symbol" in dir(v):
+        if not v.is_Number:
+            return v
+    if np.abs(v) < SMALL_VALUE:
+        return 0
+    return v
+
+def solveLinearSystem(aMat, bMat):
+    """
+    Finds a solution to A*x = b. Chooses an arbitrary
+    solution if multiple solutions exist.
+
+    Parameters
+    ----------
+    aMat: sympy.Matrix (N X N)
+        A
+    bMat: sympy.Matrix (N X 1)
+        b
+    
+    Returns
+    -------
+    sympy.Matrix: N X 1
+    """
+    numRow = aMat.rows
+    dummyVec = mkVector("x", numRow)
+    dummySymbols = [v for v in dummyVec]
+    #
+    system = aMat, bMat
+    result = sympy.linsolve(system, *dummyVec)
+    lst = flatten(result)
+    # Handle case of multiple solutions
+    subs = {s: 1 for s in lst if s in dummySymbols}
+    return sympy.Matrix(lst)
+
+def expressionToNumber(expression):
+    """
+    Converts an exprssion to a numpy number.
+    Throws an exception if it cannot be done.
+
+    Parameters
+    ----------
+    expression: sympy.Add
+    
+    Returns
+    -------
+    float/complex
+    """
+    # Convert expression to a number
+    if "evalf" in dir(expression):
+        val = expression.evalf()
+        try:
+            val = float(val)
+        except TypeError:
+            val = complex(val)
+    else:
+        val = expression  # already a number
+    # Eliminate small values
+    if np.abs(val) < SMALL_VALUE:
+        val = 0
+    if np.angle(val) < SMALL_VALUE:
+        val = np.sign(val) * np.abs(val)
+    return val
+    
+def isZero(val):
+    """
+    Tests if a scalar, number or symbol, is 0.
+   
+    Parameters
+    ----------
+    val: number or symbol or expression
+    
+    Returns
+    -------
+    bool
+    """
+    try:
+        if np.isclose(np.abs(val), 0):
+            return True
+    except TypeError:
+        newVal = complex(val)
+        return np.abs(newVal) == 0
+
+def isVecZero(vec):
+    """
+    Tests if a vector, numbers or symbols, are equal.
+   
+    Parameters
+    ----------
+    vec: sympy.Matrix (N X 1)
+
+    Returns
+    -------
+    bool
+    """
+    trues = [isZero(e) for e in vec]
+    return all(trues)
