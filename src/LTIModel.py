@@ -9,6 +9,7 @@ SUffix conventions
 """
 import src.constants as cn
 import src.sympyUtil as su
+from src.eigenCollection import EigenCollection
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -62,56 +63,6 @@ class LTIModel():
         self.solutionVec = None
         self.evaluatedSolutionVec = None
 
-    # TODO: TEST
-    @staticmethod
-    def _mkEigenVectors(aMat, eigenInfo):
-        """
-        Creates an orthogonal set of eigenvectors to handle
-        situations where the algebraic multiplicity is greater than
-        geometric multiplicity.
-  
-        From "3.7: Multiple Eigenvalues", Libre Tests.
-
-        Parameters
-        ----------
-        aMat: sympy.Matrix (N X N)
-        eigenInfo: EigenInfo
-        
-        Returns
-        -------
-        list-(sympy.Matrix N X 1)
-        """
-        if eigenInfo.mul == len(eigenInfo.vecs):
-            return eigenInfo.vecs
-        if len(eigenInfo.vecs) != 1:
-            raise RuntimeError("Cannot handle this case.")
-        # Construct a set of orthogonal eigenvectors
-        vecs = list(eigenInfo.vecs)
-        curVec = vecs[0]
-        numRow = curVec.rows
-        dummyVec = su.mkVector("x", numRow)
-        dummySymbols = [v for v in dummyVec]
-        newVecs = []
-        for _ in range(eigenInfo.mul - len(vecs)):
-            mat = aMat - eigenInfo.val*sympy.eye(numRow)
-            system = mat, curVec
-            result = sympy.linsolve(system, *dummyVec)
-            lst = su.flatten(result)
-            # Handle case of multiple solutions
-            subs = {s: 1 for s in lst if s in dummySymbols}
-            newVec = sympy.Matrix(lst)
-            newVec = su.substitute(newVec, subs=subs)
-            newVecs.append(newVec)
-            curVec = newVec
-        # Construct linear independent vector
-        eigenVecs = list(newVecs[0])
-        numVec = len(newVecs)
-        for idx in range(numVec):
-            n = numVec - idx - 1
-            newEigenVec = 1.0/np.math.factorial(n) * (t**n) * newVecs[idx]
-            eigenVecs.append(newEigenVec)
-        return eigenVecs
-
     def solve(self, subs={}):
         """
         Solves the LTI system symbolically.
@@ -121,7 +72,6 @@ class LTIModel():
         -------
         sympy.Matrix (N X 1)
         """
-        # TODO: Handle algebraich multiplicy > 2
         # TODO: Handle imaginary eigenvalues
         # FIXME: fundamental matrix does not include the constants and so
         #        I'm incorrectly calculating Yp
@@ -137,20 +87,20 @@ class LTIModel():
             return v
         #
         timer = Timer("solve")
-        vecs = []
         # Do evaluations
         aMat = su.evaluate(self.aMat, isNumpy=False, subs=subs)
         initialVec = su.evaluate(self.initialVec, isNumpy=False, subs=subs)
         # Find the complete set of eigenvectors, handling cases
         # in which the algebraic multiplicity > geometric multiplicity
         # TODO: combine together EigenInfo with same eigenValue
-        eigenInfos = su.getEigenInfo(aMat)
-        for eigenInfo in eigenInfos:
-            import pdb; pdb.set_trace()
-            eigenVecs = self._mkEigenVectors(aMat, eigenInfo)
-            term = sympy.exp(eigenInfo.val * t)
-            vecs.extend([v * term for v in eigenVecs])
+        eigenCollection = EigenCollection(aMat)
+        eigenCollection.completeEigenvectors()
         timer.print(name="solve_1")
+        # Construct vector of solutions
+        vecs = []
+        for eigenInfo in eigenCollection.eigenInfos:
+            for eigenVector in eigenInfo.vecs:
+                vecs.append(eigenVector * sympy.exp(eigenInfo.val * t))
         # Construct the fundamental matrix
         fundamentalMat= sympy.Matrix(vecs)
         fundamentalMat = fundamentalMat.reshape(self.numRow, self.numRow)
@@ -159,9 +109,7 @@ class LTIModel():
         # Find the coefficients for the homogeneous system
         # TODO: Instead of finding the inverse, solve the linear system
         t0Mat = sympy.simplify(fundamentalMat.subs(t, 0)) # evaluate at time 0
-        import pdb; pdb.set_trace()
-        t0InvMat = t0Mat.inv()
-        coefHomogeneousVec = sympy.simplify(t0InvMat*initialVec)
+        coefHomogeneousVec = su.solveLinearSingular(t0Mat, initialVec)
         timer.print(name="solve_3")
         # Particular solution 
         if self.rVec is not None:

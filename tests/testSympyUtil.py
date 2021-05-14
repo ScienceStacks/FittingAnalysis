@@ -79,17 +79,6 @@ class TestFunctions(unittest.TestCase):
               if (n[0] == nameRoot) and (len(n) == 3)]
         self.assertEqual(len(newNames), numRow)
 
-    def testGetEigenInfo(self):
-        if IGNORE_TEST:
-            return
-        mat = sympy.eye(3)
-        infos = su.getEigenInfo(mat)
-        self.assertEqual(len(infos), 1)
-        eigenInfo = infos[0]
-        self.assertEqual(eigenInfo.mul, 3)
-        self.assertEqual(eigenInfo.val, 1)
-        self.assertEqual(len(eigenInfo.vecs), 3)
-
     # FIXME:
     def testSolveLinearSystem(self):
         return

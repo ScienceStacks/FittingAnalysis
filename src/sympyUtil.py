@@ -22,11 +22,7 @@ import numpy as np
 import sympy
 
 SMALL_VALUE = 1e-8
-
-# val - eigenvalue
-# vecs - eigenvectors
-# mul - algebraic multiplicity
-EigenInfo = collections.namedtuple("EigenInfo", "val, vecs, mul")
+DEFAULT_VALUE = 1.0  # Value substituted in parameterized expressions
 
 def _getDct(dct, frame):
     """
@@ -194,32 +190,6 @@ def flatten(vec):
     list
     """
     return [ [v for v in z] for z in vec][0]
-
-# TODO: combine together EigenInfo with same eigenValue
-#       check if vectors have same value. How handle symbols.
-def getEigenInfo(mat):
-    """
-    Collects the eigenvalue and eigenvector information into a list of
-    EigenInfo objects.
-
-    Parameters
-    ----------
-    mat: sympy.Matrix
-    
-    Returns
-    -------
-    list-EigenInfo
-    """
-    eigenInfos = []
-    eigenvalDct = {roundToZero(k): v for k, v in mat.eigenvals().items()}
-    for entry in mat.eigenvects():
-        eigenvalue = roundToZero(entry[0])
-        algebraicMultiplicity = eigenvalDct[eigenvalue]
-        vecs = [vectorRoundToZero(v) for v in entry[2]]  # Eigenvectors
-        algebraicMultiplicity = len(vecs)
-        eigenInfos.append(EigenInfo(val=eigenvalue, vecs=vecs,
-              mul=algebraicMultiplicity))
-    return eigenInfos
     
 def vectorRoundToZero(vec):
     if vec.cols > 1:
@@ -228,7 +198,7 @@ def vectorRoundToZero(vec):
     return sympy.Matrix(newValues)
 
 def roundToZero(v):
-    if "is_symbol" in dir(v):
+    if isSympy(v):
         if not v.is_Number:
             return v
     if np.abs(v) < SMALL_VALUE:
@@ -274,9 +244,13 @@ def expressionToNumber(expression):
     Returns
     -------
     float/complex
+    
+    Raises
+    -------
+    TypeError if not convertable to a number
     """
     # Convert expression to a number
-    if "evalf" in dir(expression):
+    if isSympy(expression):
         val = expression.evalf()
         try:
             val = float(val)
@@ -290,6 +264,10 @@ def expressionToNumber(expression):
     if np.angle(val) < SMALL_VALUE:
         val = np.sign(val) * np.abs(val)
     return val
+
+def isSympy(val):
+    properties = dir(val)
+    return ("is_symbol" in properties) or ("evalf" in properties)
     
 def isZero(val):
     """
@@ -303,10 +281,16 @@ def isZero(val):
     -------
     bool
     """
+    if isSympy(val):
+        try:
+            val = expressionToNumber(val)
+        except:
+            return False
     try:
         if np.isclose(np.abs(val), 0):
             return True
     except TypeError:
+        import pdb; pdb.set_trace()
         newVal = complex(val)
         return np.abs(newVal) == 0
 
@@ -324,3 +308,29 @@ def isVecZero(vec):
     """
     trues = [isZero(e) for e in vec]
     return all(trues)
+
+def solveLinearSingular(aMat, bVec, isParameterized=False):
+    """
+    Solves a linear system where the matrix may be singular.
+    Parameter values are set to one if not isParameterized.
+
+    Parameters
+    ----------
+    aMat: sympy.Matrix N X N
+    bVec: sympy.Matrix N X 1
+    
+    Returns
+    -------
+    sympy.Matrix N X 1
+    """
+    solution = aMat.gauss_jordan_solve(bVec)
+    solutionVec = solution[0]
+    if not isParameterized:
+        parameterMat = solution[1]
+        for parameter in parameterMat:
+            solutionVec = solutionVec.subs(parameter, DEFAULT_VALUE)
+    solutionVec = solutionVec.evalf()
+    return solutionVec
+   
+    
+    

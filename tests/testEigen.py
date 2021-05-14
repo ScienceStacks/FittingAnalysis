@@ -8,8 +8,8 @@ import sympy
 import unittest
 
 
-IGNORE_TEST = True
-IS_PLOT = True
+IGNORE_TEST = False
+IS_PLOT = False
 VARIABLES = "k0 k1 k2"
 su.addSymbols(VARIABLES, dct=globals())
 # No. eigenvalues: 2, Algebraic multiplicity: 1, Geometric multiplicity: 1
@@ -21,6 +21,11 @@ FULL_MAT = sympy.Matrix([
 DEFICIENT_MAT = sympy.Matrix([
       [1, 0],
       [2, 1],
+      ])
+LARGE_MAT = sympy.Matrix([
+      [1, 0, 2],
+      [2, 1, 3],
+      [1, 3, 3],
       ])
 SUBS = {k0: 1, k1: 2, k2: 3}
 
@@ -56,13 +61,30 @@ class TestEigenInfo(unittest.TestCase):
 
     def setUp(self):
         su.addSymbols(VARIABLES, dct=globals())
-        aMat = FULL_MAT.copy()
-        eigenCollection = EigenCollection(self.aMat)
-        self.eigenInfo = eigenCollection[0]
+        self.eigenInfo = self.mkEigenInfo()
 
-    def testConstructor(self)
-        # TESTING
-        import pdb; pdb.set_trace()
+    def mkEigenInfo(self, mat=FULL_MAT):
+        aMat = mat.copy()
+        eigenCollection = EigenCollection(aMat)
+        return eigenCollection.eigenInfos[0].copy()
+
+    def testConstructor(self):
+        if IGNORE_TEST:
+            return
+        self.assertEqual(self.eigenInfo.mul, 1)
+
+    def testAddVectors(self):
+        if IGNORE_TEST:
+            return
+        def test(numVec):
+            eigenInfo = self.mkEigenInfo(mat=LARGE_MAT)
+            curSize = len(eigenInfo.vecs)
+            eigenInfo.addVectors(numVec)
+            self.assertEqual(curSize + numVec, len(eigenInfo.vecs))
+            return eigenInfo
+        #
+        _ = test(1)
+        _ = test(2)
 
 
 if __name__ == '__main__':
