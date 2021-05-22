@@ -3,6 +3,7 @@ lmfit
 matplotlib
 numpy
 pandas
+pylint
 SBstoat
 scipy
 seaborn
