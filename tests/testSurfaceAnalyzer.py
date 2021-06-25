@@ -5,6 +5,8 @@ from src.surfaceAnalyzer import SurfaceAnalyzer
 import src.constants as cn
 
 import matplotlib
+import pdb; pdb.set_trace()
+import pdb; pdb.set_trace()
 matplotlib.use("Tkagg")
 import numpy as np
 import pandas as pd
