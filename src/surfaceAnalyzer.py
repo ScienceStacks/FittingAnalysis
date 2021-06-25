@@ -4,7 +4,6 @@
 Analyzes fitting surfaces for reaction networks.
 """
 import src.constants as cn
-
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 import numpy as np
