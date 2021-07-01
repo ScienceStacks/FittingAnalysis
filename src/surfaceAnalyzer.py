@@ -185,13 +185,19 @@ class SurfaceAnalyzer():
         maxFrac: float
           maximum fractional change in a parameter value
         numLevel: int
+        parameterNames: list-str
+          names of parameters for which a design is constructed
             
         Returns
         -------
         pd.DataFrame
             Columns: parameter names, cn.NRMSE
         """
-        designDF = self._mkFactorialDesign(self.trueParameterDct, maxFrc, numLevel)
+        if parameterNames is None:
+            parameterNames = list(self.trueParameterDct.keys())
+        newTrueParameterDct = {k: v for k, v in self.trueParameterDct.items()
+              if k in parameterNames}
+        designDF = self._mkFactorialDesign(newTrueParameterDct, maxFrc, numLevel)
         #
         nrmses = []
         for idx, rowSer in designDF.iterrows():
